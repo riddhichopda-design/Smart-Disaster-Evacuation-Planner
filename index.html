@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Disaster Evacuation Planner</title>
+    <script src="serial.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80') no-repeat center center fixed;
+            background-size: cover;
+            color: #333;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .sidebar {
+            width: 20%;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.5);
+            overflow-y: auto;
+        }
+        .sidebar h2 {
+            margin-top: 0;
+            color: #FFD700;
+        }
+        .sidebar ul {
+            list-style: none;
+            padding: 0;
+        }
+        .sidebar li {
+            margin: 10px 0;
+        }
+        .sidebar button {
+            width: 100%;
+            padding: 12px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s, transform 0.2s;
+        }
+        .sidebar button:hover {
+            background: #45a049;
+            transform: scale(1.05);
+        }
+        .sidebar button.active {
+            background: #FFD700;
+            color: black;
+        }
+        .content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: rgba(255, 255, 255, 0.9);
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        h1 {
+            text-align: center;
+            font-size: 80px;
+            color: #2E8B57;
+            margin-bottom: 20px;
+            animation: slideDown 0.8s ease-out;
+        }
+        h2{
+            font-size: 40px;
+        }
+        @keyframes slideDown {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        #map-container {
+            width: 100%;
+            height: 1000px;
+            border: 2px solid #ddd;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+            position: relative;
+        }
+        svg {
+            width: 100%;
+            height: 100%;
+        }
+        .node {
+            fill: #69b3a2;
+            stroke: #fff;
+            stroke-width: 2px;
+            transition: fill 0.3s;
+        }
+        .node:hover {
+            fill: #FFD700;
+        }
+        .edge {
+            stroke: #999;
+            stroke-width: 2px;
+            fill: none;
+        }
+        .safe-path {
+            stroke: green;
+            stroke-width: 4px;
+            fill: none;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { stroke-width: 4px; }
+            50% { stroke-width: 6px; }
+            100% { stroke-width: 4px; }
+        }
+        .city-image {
+            width: 70px;
+            height: 70px;
+        }
+        .controls {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        select, button {
+            padding: 10px;
+            font-size: 30px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            transition: box-shadow 0.3s;
+        }
+        select:focus, button:focus {
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
+        }
+        #path-result {
+            text-align: center;
+            font-size: 20px;
+            margin-top: 20px;
+            animation: fadeIn 1s ease-in;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+        }
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+        tr:hover {
+            background: #e0f7e0;
+        }
+        .page {
+            display: none;
+        }
+        .page.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Menu</h2>
+        <ul>
+            <li><button onclick="showPage('input', event)" class="active">Input</button></li>
+            <li><button onclick="showPage('risk', event)">Risk Data</button></li>
+            <li><button onclick="showPage('path', event)">Path</button></li>
+            <li><button onclick="showPage('planner', event)">Planner</button></li>
+        </ul>
+    </div>
+    <div class="content">
+        <h1>😀Smart Disaster Evacuation Planner</h1>
+
+        <div id="input" class="page active">
+            <h2>Input Travel Details</h2>
+            <div class="controls">
+                <div>
+                    <label style="font-size: 30px;">Start City:</label>
+                    <select id="start-city">
+                        <option value="Dehradun">Dehradun</option>
+                        <option value="Mussoorie">Mussoorie</option>
+                        <option value="Haridwar">Haridwar</option>
+                        <option value="Rishikesh">Rishikesh</option>
+                        <option value="Chamba">Chamba</option>
+                        <option value="Tehri">Tehri</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size: 30px;">End City:</label>
+                    <select id="end-city">
+                        <option value="Dehradun">Dehradun</option>
+                        <option value="Mussoorie">Mussoorie</option>
+                        <option value="Haridwar">Haridwar</option>
+                        <option value="Rishikesh">Rishikesh</option>
+                        <option value="Chamba">Chamba</option>
+                        <option value="Tehri">Tehri</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div id="risk" class="page">
+            <h2>Risk Data</h2>
+            <table id="risk-table">
+                <thead>
+                    <tr>
+                        <th>Edge</th>
+                        <th>Fire Risk</th>
+                        <th>Flood Risk</th>
+                        <th>Earthquake Risk</th>
+                        <th>Landslide Risk</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <button onclick="connectSerial()" style="margin-top: 10px;">🔌 Connect</button>
+            <button onclick="disconnectSerial()" style="margin-top: 10px;">⛔ Disconnect</button>
+            <button onclick="manualUpdate()" style="margin-top: 10px;">🔄 Update Now (Instant)</button>
+
+            <p id="risk-status" style="font-size:20px; color:green; margin-top:10px;"></p>
+            <p id="last-updated" style="font-size:16px; color:#333; margin-top:6px;"></p>
+
+        </div>
+
+        <div id="path" class="page">
+            <h2>All Possible Routes</h2>
+            <div id="map-container">
+                <svg id="map-svg"></svg>
+            </div>
+            <p>All edges represent possible routes. Risks are not considered here.</p>
+        </div>
+
+        <div id="planner" class="page">
+            <h2>Evacuation Planner</h2>
+            <div id="map-container">
+                <svg id="map-svg-planner"></svg>
+            </div>
+            <button onclick="calculatePath()">Calculate Safest Path</button>
+            <div id="path-result"></div>
+        </div>
+    </div>
+
+<script>
+    // Graph data
+    const graph = {
+        "edges": [
+            { "from": "Dehradun", "to": "Mussoorie", "weight": 34 },
+            { "from": "Dehradun", "to": "Haridwar", "weight": 54 },
+            { "from": "Dehradun", "to": "Rishikesh", "weight": 20 },
+            { "from": "Haridwar", "to": "Rishikesh", "weight": 25 },
+            { "from": "Mussoorie", "to": "Rishikesh", "weight": 40 },
+            { "from": "Mussoorie", "to": "Chamba", "weight": 55 },
+            { "from": "Chamba", "to": "Tehri", "weight": 60 },
+            { "from": "Rishikesh", "to": "Tehri", "weight": 70 }
+        ]
+    };
+
+    let riskData = JSON.parse(localStorage.getItem('riskData')) || {};
+    if(Object.keys(riskData).length === 0){
+        graph.edges.forEach(edge => {
+            const key = `${edge.from}-${edge.to}`;
+            riskData[key] = { fire:0,flood:0,earthquake:0,landslide:0 };
+        });
+        localStorage.setItem('riskData', JSON.stringify(riskData));
+    }
+
+    const positions = {
+        "Dehradun": { x: 300, y: 500 },
+        "Mussoorie": { x: 600, y: 200 },
+        "Haridwar": { x: 150, y: 800 },
+        "Rishikesh": { x: 450, y: 650 },
+        "Chamba": { x: 900, y: 350 },
+        "Tehri": { x: 750, y: 800 }
+    };
+
+    const cityImages = {
+        Dehradun: 'images/Dehradun.jpg',
+        Mussoorie: 'images/Mussoorie.jpg',
+        Haridwar:  'images/Haridwar.jpg',
+        Rishikesh: 'images/Rishikesh.jpg',
+        Chamba:  'images/Chamba.jpg',
+        Tehri: 'images/Tehri.jpg',
+    };
+
+    function manualUpdate() {
+         if (!isConnected) {
+             alert("Please connect to ESP32 first.");
+             return;
+         }
+     
+         console.log("Manual update requested...");
+         document.getElementById("risk-status").innerText = "Updating now...";
+     
+         readSerialData().then(() => {
+             document.getElementById("risk-status").innerText = "Updated ✔";
+             setTimeout(() => {
+                 document.getElementById("risk-status").innerText = "";
+             }, 2000);
+         });
+    }
+
+
+    function drawMap(svgId, safePath=[], showAll=true){
+        const svg = d3.select(`#${svgId}`);
+        svg.selectAll("*").remove();
+
+        // edges
+        graph.edges.forEach(edge=>{
+            const fromPos = positions[edge.from];
+            const toPos = positions[edge.to];
+            const isSafe = safePath.some(p => (p.from===edge.from && p.to===edge.to) || (p.from===edge.to && p.to===edge.from));
+            if(showAll || isSafe){
+                svg.append("line")
+                    .attr("x1",fromPos.x)
+                    .attr("y1",fromPos.y)
+                    .attr("x2",toPos.x)
+                    .attr("y2",toPos.y)
+                    .attr("class", isSafe?"safe-path":"edge");
+            }
+        });
+
+        // nodes
+        Object.keys(positions).forEach(city=>{
+            const pos = positions[city];
+            const group = svg.append("g");
+            group.append("circle")
+                .attr("cx", pos.x)
+                .attr("cy", pos.y)
+                .attr("r", 60)
+                .attr("class", "node");
+            group.append("image")
+                .attr("x", pos.x - 35)
+                .attr("y", pos.y - 35)
+                .attr("width", 70)
+                .attr("height", 70)
+                .attr("href", cityImages[city])
+                .attr("class", "city-image");
+            group.append("text")
+                .attr("x", pos.x)
+                .attr("y", pos.y + 50)
+                .attr("text-anchor", "middle")
+                .text(city);
+        });
+    }
+
+    function dijkstra(start, end) {
+    const nodes = Object.keys(positions);
+    const dist = {};
+    const prev = {};
+    const pq = [];
+
+    nodes.forEach(node => { dist[node] = Infinity; prev[node] = null; });
+    dist[start] = 0;
+    pq.push({ node: start, dist: 0 });
+
+    while (pq.length > 0) {
+        pq.sort((a, b) => a.dist - b.dist);
+        const { node: u } = pq.shift();
+        if (u === end) break;
+
+        graph.edges.forEach(edge => {
+            let v, weight = edge.weight;
+            if (edge.from === u) v = edge.to;
+            else if (edge.to === u) v = edge.from;
+            else return;
+
+            const key = `${edge.from}-${edge.to}`;
+            const altKey = `${edge.to}-${edge.from}`;
+            const risks = riskData[key] || riskData[altKey] || { fire: 0, flood: 0, earthquake: 0, landslide: 0 };
+
+            // Compute risk penalty using priority weights
+            //considiring fire=100, flood=50, landslide=20, earthquake=10
+            const riskPenalty = (risks.fire * 100 + risks.flood * 50 + risks.landslide * 20 + risks.earthquake * 10);
+
+            const effectiveWeight = weight + riskPenalty;
+
+            if (dist[v] > dist[u] + effectiveWeight) {
+                dist[v] = dist[u] + effectiveWeight;
+                prev[v] = u;
+                pq.push({ node: v, dist: dist[v] });
+            }
+        });
+    }
+
+    const path = [];
+    let current = end;
+    while (current) { path.unshift(current); current = prev[current]; }
+    if (path[0] !== start) return null;
+
+    const pathEdges = [];
+    for (let i = 0; i < path.length - 1; i++) {
+        pathEdges.push({ from: path[i], to: path[i + 1] });
+    }
+    return pathEdges;
+}
+
+
+    function calculatePath(){
+        const start = document.getElementById('start-city').value;
+        const end = document.getElementById('end-city').value;
+        const safePath = dijkstra(start,end);
+        if(safePath){
+            drawMap('map-svg-planner',safePath,false);
+            const totalRisk = safePath.reduce((sum,edge)=>{
+                const key = `${edge.from}-${edge.to}`;
+                const altKey = `${edge.to}-${edge.from}`;
+                const risks = riskData[key] || riskData[altKey] || {fire:0,flood:0,earthquake:0,landslide:0};
+                return sum + risks.fire + risks.flood + risks.earthquake + risks.landslide;
+            },0);
+            document.getElementById('path-result').innerHTML = `<p>Safest Path: ${safePath.map(e=>`${e.from} -> ${e.to}`).join(' -> ')}</p><p>Total Risk: ${totalRisk}</p>`;
+        } else {
+            document.getElementById('path-result').innerHTML = '<p>No path found.</p>';
+        }
+    }
+
+    function displayRiskData(){
+        const tbody = document.querySelector('#risk-table tbody');
+        tbody.innerHTML = '';
+        Object.keys(riskData).forEach(key=>{
+            const risks = riskData[key];
+            tbody.innerHTML += `
+                <tr>
+                    <td>${key}</td>
+                    <td>${risks.fire}</td>
+                    <td>${risks.flood}</td>
+                    <td>${risks.earthquake}</td>
+                    <td>${risks.landslide}</td>
+                </tr>
+            `;
+        });
+    }
+
+    function showPage(pageId,event){
+        document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+        document.getElementById(pageId).classList.add('active');
+        document.querySelectorAll('.sidebar button').forEach(btn=>btn.classList.remove('active'));
+        event.target.classList.add('active');
+        if(pageId==='risk') displayRiskData();
+        if(pageId==='path') drawMap('map-svg',[],true);
+        if(pageId==='planner') drawMap('map-svg-planner',[],false);
+    }
+
+    function updateRiskData(){
+        if(!window.isConnected){
+            if(typeof connectSerial==='function') connectSerial();
+            else alert("serial.js not loaded or connectSerial() not defined");
+        } else {
+            if(typeof disconnectSerial==='function') disconnectSerial();
+        }
+    }
+
+    drawMap('map-svg',[],true);
+    drawMap('map-svg-planner',[],false);
+    displayRiskData();
+</script>
+</body>
+</html>
