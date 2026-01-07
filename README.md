@@ -21,9 +21,7 @@ Simple, lightweight front-end (HTML + JS)
 
 Smart-Disaster-Planner/
 |--- index.html
-|--- app.js
 |--- serial.js
-|--- styles.css
 |--- README.md
 
 
